@@ -31,9 +31,18 @@ class PlaywrightBrowser:
             
             self.playwright = await async_playwright().start()
             
-            # Launch Chromium with stealth options
-            self.browser = await self.playwright.chromium.launch(
+            # Create context with persistent storage for WhatsApp login
+            from ..config_manager import get_config_manager
+            config = get_config_manager()
+            user_data = Path(config.config.paths.data_dir) / "browser_data"
+            user_data.mkdir(parents=True, exist_ok=True)
+            
+            # Use persistent context to maintain WhatsApp login
+            self.context = await self.playwright.chromium.launch_persistent_context(
+                str(user_data),
                 headless=self.headless,
+                viewport={'width': 1280, 'height': 800},
+                permissions=['notifications'],
                 args=[
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
@@ -41,24 +50,12 @@ class PlaywrightBrowser:
                     '--disable-accelerated-2d-canvas',
                     '--no-first-run',
                     '--no-zygote',
-                    '--single-process',  # Required for some environments
+                    '--single-process',
                     '--disable-gpu'
                 ]
             )
             
-            # Create context with persistent storage
-            from ..config_manager import get_config_manager
-            config = get_config_manager()
-            user_data = Path(config.config.paths.data_dir) / "browser_data"
-            user_data.mkdir(parents=True, exist_ok=True)
-            
-            self.context = await self.browser.new_context(
-                viewport={'width': 1280, 'height': 800},
-                user_data_dir=str(user_data),
-                permissions=['notifications']
-            )
-            
-            self.page = await self.context.new_page()
+            self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
             
         except ImportError:
             raise ImportError("Playwright not installed. Run: pip install playwright && playwright install chromium")
@@ -111,12 +108,16 @@ class PlaywrightBrowser:
     
     async def close(self):
         """Close browser."""
-        if self.context:
-            await self.context.close()
-        if self.browser:
-            await self.browser.close()
-        if self.playwright:
-            await self.playwright.stop()
+        try:
+            if self.context:
+                await self.context.close()
+        except:
+            pass
+        try:
+            if self.playwright:
+                await self.playwright.stop()
+        except:
+            pass
     
     # ===== Sync wrappers for easier use =====
     
