@@ -13,8 +13,14 @@ chromadb>=0.4.0
 sentence-transformers>=2.0.0  # For embeddings
 
 # === Web & Browser ===
+# Option 1: Playwright (Recommended - modern, reliable)
+playwright>=1.40.0
+# Run after install: playwright install chromium
+
+# Option 2: Selenium (Legacy fallback)
 selenium>=4.0.0
 webdriver-manager>=4.0.0
+
 requests>=2.28.0
 beautifulsoup4>=4.11.0
 
