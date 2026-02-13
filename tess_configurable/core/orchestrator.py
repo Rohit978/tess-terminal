@@ -852,11 +852,11 @@ class Orchestrator:
         
         from ..skills.research import ResearchSkill
         
-        # Ensure web browser - use Playwright by default
+        # Ensure web browser - use WebSearchPlaywright for search capability
         if "web_browser" not in self.components:
             try:
-                from .playwright_browser import PlaywrightBrowser
-                self.components["web_browser"] = PlaywrightBrowser()
+                from .playwright_browser import WebSearchPlaywright
+                self.components["web_browser"] = WebSearchPlaywright()
             except ImportError:
                 # Fallback to Selenium
                 from .web_browser import WebBrowser
