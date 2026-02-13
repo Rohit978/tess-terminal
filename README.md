@@ -25,13 +25,13 @@ A **standalone, user-configurable** terminal AI agent that puts you in control. 
 ### Option 1: Install from GitHub (Recommended)
 
 ```bash
-pip install git+https://github.com/YOUR_USERNAME/tess-terminal.git
+pip install git+https://github.com/Rohit978/tess-terminal.git
 ```
 
 ### Option 2: Clone and Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/tess-terminal.git
+git clone https://github.com/Rohit978/tess-terminal.git
 cd tess-terminal
 pip install -e .
 ```
@@ -228,4 +228,5 @@ Inspired by the original TESS Terminal Pro. This configurable edition focuses on
 
 If you find TESS useful, please consider starring the repo!
 
-[![Star History Chart](https://api.star-history.com/svg?repos=YOUR_USERNAME/tess-terminal&type=Date)](https://star-history.com/Rohit978/tess-terminal&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Rohit978/tess-terminal&type=Date)](https://star-history.com/Rohit978/tess-terminal&Date)
+
