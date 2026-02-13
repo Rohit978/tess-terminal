@@ -122,12 +122,9 @@ class TelegramSetupWizard:
         # Get token from user
         console.print("\n[cyan]Paste your API token below:[/cyan]")
         console.print("[dim]Tip: The token looks like: 123456789:ABCdefGHIjklMNOpqrSTUvwxyz[/dim]")
+        console.print("[dim]Input is visible for easier editing and pasting[/dim]")
         
-        import getpass
-        try:
-            token = getpass.getpass("\nBot Token: ")
-        except:
-            token = input("Bot Token: ")
+        token = input("\nBot Token: ")
         
         # Validate token format
         if not token or ":" not in token:

@@ -133,7 +133,7 @@ class SetupWizard:
             
             default_yes = (provider == primary)
             if Confirm.ask(f"Configure {provider} now?", default=default_yes):
-                key = self._secure_input(f"Enter {provider} API key")
+                key = self._visible_input(f"Enter {provider} API key")
                 
                 if key:
                     is_valid, msg = self.config.validate_api_key(provider, key)
@@ -290,15 +290,11 @@ class SetupWizard:
             console.print("[dim]Get bot token from @BotFather on Telegram[/dim]")
             console.print("[dim]Type or paste your token (input is hidden)[/dim]")
             
-            try:
-                import getpass
-                token = getpass.getpass("Bot Token: ")
-                if token:
-                    masked = token[:6] + "****" if len(token) > 6 else "****"
-                    console.print(f"[dim]Token received: {masked}[/dim]")
-            except Exception as e:
-                console.print(f"[yellow]Secure input error: {e}[/yellow]")
-                token = input("Bot Token (visible): ")
+            console.print("[dim]Your token will be visible while typing (for easier editing)[/dim]")
+            token = input("Bot Token: ")
+            if token:
+                masked = token[:6] + "****" if len(token) > 6 else "****"
+                console.print(f"[dim]Token received: {masked}[/dim]")
             
             user_id = Prompt.ask("Your Telegram User ID")
             
@@ -316,31 +312,18 @@ class SetupWizard:
             port = Prompt.ask("Web port", default="8000")
             f.web_port = int(port)
     
-    def _secure_input(self, prompt: str) -> str:
-        """Get secure input with visual feedback."""
-        import sys
-        
+    def _visible_input(self, prompt: str) -> str:
+        """Get visible input for easier editing and pasting."""
         console.print(f"\n[cyan]{prompt}[/cyan]")
-        console.print("[dim]Tip: Type or paste your key (input is hidden for security)[/dim]")
-        console.print("[dim]Press Enter when done...[/dim]\n")
+        console.print("[dim]Type or paste your key (input is visible for easier editing)[/dim]")
+        key = input("Key: ")
         
-        try:
-            # Use getpass for security but show it's working
-            import getpass
-            key = getpass.getpass("Key: ")
-            
-            # Show feedback that something was entered
-            if key:
-                masked = key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
-                console.print(f"[green]✓ Received: {masked}[/green]")
-            
-            return key
-            
-        except Exception as e:
-            # Fallback to visible input if getpass fails
-            console.print("[yellow]⚠ Secure input not available, using regular input[/yellow]")
-            key = input(f"{prompt}: ")
-            return key
+        # Show feedback that something was entered
+        if key:
+            masked = key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
+            console.print(f"[green]✓ Received: {masked}[/green]")
+        
+        return key
     
     def _get_key_url(self, provider: str) -> str:
         """Get URL for API key generation."""

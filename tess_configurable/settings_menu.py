@@ -166,20 +166,14 @@ class SettingsMenu:
     def _prompt_for_key(self, provider: str):
         """Prompt for and validate an API key."""
         console.print(f"\n[dim]Get your key from:[/dim] {self._get_key_url(provider)}")
-        console.print("[dim]Type or paste your key (input is hidden for security)[/dim]")
+        console.print("[dim]Type or paste your key (input is visible for easier editing)[/dim]")
         
-        try:
-            import getpass
-            key = getpass.getpass(f"Enter {provider} API key: ")
-            
-            # Show feedback
-            if key:
-                masked = key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
-                console.print(f"[dim]Received: {masked}[/dim]")
-                
-        except Exception as e:
-            console.print(f"[yellow]Secure input error: {e}[/yellow]")
-            key = input(f"Enter {provider} API key (visible): ")
+        key = input(f"Enter {provider} API key: ")
+        
+        # Show feedback
+        if key:
+            masked = key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
+            console.print(f"[dim]Received: {masked}[/dim]")
         
         if key:
             is_valid, msg = self.config.validate_api_key(provider, key)
@@ -318,15 +312,10 @@ class SettingsMenu:
             console.print("[dim]Get token from @BotFather on Telegram[/dim]")
             console.print("[dim]Type or paste your token (input is hidden)[/dim]")
             
-            try:
-                import getpass
-                token = getpass.getpass("Bot Token (press Enter to keep current): ")
-                if token:
-                    masked = token[:6] + "****" if len(token) > 6 else "****"
-                    console.print(f"[dim]Token received: {masked}[/dim]")
-            except Exception as e:
-                console.print(f"[yellow]Secure input error: {e}[/yellow]")
-                token = input("Bot Token (visible): ")
+            token = input("Bot Token (press Enter to keep current): ")
+            if token:
+                masked = token[:6] + "****" if len(token) > 6 else "****"
+                console.print(f"[dim]Token received: {masked}[/dim]")
             
             if token:
                 self.config.config.telegram_token = token
