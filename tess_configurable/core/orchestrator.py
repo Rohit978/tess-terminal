@@ -8,6 +8,35 @@ import subprocess
 import platform
 from typing import Dict, Any, Callable, Optional
 
+# Lazy imports for optional features
+DocumentAI = None
+WorkflowEngine = None
+PreferenceMemory = None
+
+
+def _get_document_ai(brain=None):
+    global DocumentAI
+    if DocumentAI is None:
+        from .document_ai import DocumentAI as DA
+        DocumentAI = DA
+    return DocumentAI(brain)
+
+
+def _get_workflow_engine(brain=None, orchestrator=None):
+    global WorkflowEngine
+    if WorkflowEngine is None:
+        from .workflow_engine import WorkflowEngine as WE
+        WorkflowEngine = WE
+    return WorkflowEngine(brain, orchestrator)
+
+
+def _get_preference_memory(user_id="default"):
+    global PreferenceMemory
+    if PreferenceMemory is None:
+        from .preference_memory import PreferenceMemory as PM
+        PreferenceMemory = PM
+    return PreferenceMemory(user_id)
+
 
 class Executor:
     """Executes shell commands safely."""
@@ -292,6 +321,18 @@ class Orchestrator:
             "memory_op": self._handle_memory,
             "organize_op": self._handle_organize,
             "task_op": self._handle_task,
+            
+            # Document AI
+            "document_op": self._handle_document,
+            
+            # Workflows
+            "workflow_op": self._handle_workflow,
+            
+            # Notion
+            "notion_op": self._handle_notion,
+            
+            # Preferences
+            "preference_op": self._handle_preference,
         }
         
         handler = handlers.get(action_type)
@@ -434,6 +475,156 @@ class Orchestrator:
         reason = action.get("reason", "Unknown error")
         output(f"[ERROR] {reason}")
         return reason
+    
+    # ===== Document AI Handlers =====
+    
+    def _handle_document(self, action, output, brain):
+        """Handle document analysis and extraction."""
+        sub = action.get("sub_action", "")
+        path = action.get("path", "")
+        
+        doc_ai = _get_document_ai(brain)
+        
+        if sub == "extract_text":
+            ext = Path(path).suffix.lower()
+            if ext == ".pdf":
+                result = doc_ai.extract_text_from_pdf(path)
+            elif ext in [".docx", ".doc"]:
+                result = doc_ai.extract_text_from_docx(path)
+            else:
+                result = doc_ai.extract_text_from_image(path)
+            output(f"[DOCUMENT]\n{result[:1000]}...")
+            return result
+        
+        elif sub == "summarize":
+            result = doc_ai.summarize_document(path)
+            output(f"[SUMMARY]\n{result}")
+            return result
+        
+        elif sub == "ocr":
+            result = doc_ai.extract_text_from_image(path)
+            output(f"[OCR RESULT]\n{result}")
+            return result
+        
+        elif sub == "analyze_image":
+            result = doc_ai.analyze_image(path)
+            output(f"[IMAGE ANALYSIS]\n{result}")
+            return result
+        
+        return f"Unknown document action: {sub}"
+    
+    # ===== Workflow Handlers =====
+    
+    def _handle_workflow(self, action, output, brain):
+        """Handle workflow automation."""
+        sub = action.get("sub_action", "")
+        
+        if "workflow_engine" not in self.components:
+            self.components["workflow_engine"] = _get_workflow_engine(brain, self)
+        
+        engine = self.components["workflow_engine"]
+        
+        if sub == "list":
+            result = engine.list_workflows()
+            output(f"[WORKFLOWS]\n{result}")
+            return result
+        
+        elif sub == "run":
+            name = action.get("name", "")
+            result = engine.run_workflow(name, output)
+            return result
+        
+        elif sub == "create_preset":
+            preset = action.get("preset", "")
+            wf = engine.create_preset_workflow(preset)
+            if wf:
+                output(f"[TESS] Created workflow: {wf.name}")
+                return f"Created workflow: {wf.name}"
+            return f"Unknown preset: {preset}"
+        
+        elif sub == "toggle":
+            name = action.get("name", "")
+            enabled = engine.toggle_workflow(name)
+            status = "enabled" if enabled else "disabled"
+            return f"Workflow '{name}' {status}"
+        
+        return f"Unknown workflow action: {sub}"
+    
+    # ===== Notion Handlers =====
+    
+    def _handle_notion(self, action, output, brain):
+        """Handle Notion integration."""
+        if not getattr(self.config.features, 'notion', False):
+            return "Notion disabled. Run 'tess --notion-setup' to configure."
+        
+        sub = action.get("sub_action", "")
+        
+        if "notion_client" not in self.components:
+            from .notion_client import NotionClient
+            self.components["notion_client"] = NotionClient()
+        
+        client = self.components["notion_client"]
+        
+        if sub == "search":
+            query = action.get("query", "")
+            result = client.search(query)
+            output(f"[NOTION]\n{result}")
+            return result
+        
+        elif sub == "create_note":
+            title = action.get("title", "")
+            content = action.get("content", "")
+            result = client.create_note(title, content)
+            output(f"[TESS] {result}")
+            return result
+        
+        elif sub == "create_page":
+            parent = action.get("parent_id", "")
+            title = action.get("title", "")
+            content = action.get("content", "")
+            result = client.create_page(parent, title, content)
+            output(f"[TESS] {result}")
+            return result
+        
+        return f"Unknown Notion action: {sub}"
+    
+    # ===== Preference/Memory Handlers =====
+    
+    def _handle_preference(self, action, output, brain):
+        """Handle user preference learning."""
+        sub = action.get("sub_action", "")
+        
+        if "preference_memory" not in self.components:
+            self.components["preference_memory"] = _get_preference_memory()
+        
+        prefs = self.components["preference_memory"]
+        
+        if sub == "learn":
+            statement = action.get("statement", "")
+            result = prefs.learn_from_statement(statement)
+            if result:
+                output(f"[LEARNED] {result}")
+            return result or "Nothing learned"
+        
+        elif sub == "get":
+            category = action.get("category", "")
+            key = action.get("key", "")
+            value = prefs.get_preference(category, key)
+            output(f"[PREFERENCE] {category}.{key}: {value}")
+            return str(value)
+        
+        elif sub == "summary":
+            result = prefs.summarize_preferences()
+            output(f"[PREFERENCES]\n{result}")
+            return result
+        
+        elif sub == "software":
+            sw_type = action.get("type", "")
+            pref = prefs.get_software_preference(sw_type)
+            output(f"Preferred {sw_type}: {pref}")
+            return pref or f"No preference for {sw_type}"
+        
+        return f"Unknown preference action: {sub}"
     
     # ===== Communication Handlers =====
     

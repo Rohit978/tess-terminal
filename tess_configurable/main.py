@@ -288,6 +288,8 @@ def main():
             sys.argv[i] = '--help'
         elif arg in ('-google-setup', '-g'):
             sys.argv[i] = '--google-setup'
+        elif arg in ('-notion-setup', '-n'):
+            sys.argv[i] = '--notion-setup'
     
     parser = argparse.ArgumentParser(
         description="TESS Terminal - Configurable AI Agent",
@@ -298,6 +300,7 @@ Examples:
   tess --setup            Run first-time setup (also: -setup)
   tess --settings         Open settings menu (also: -settings)
   tess --google-setup     Setup Gmail and Calendar
+  tess --notion-setup     Setup Notion integration
   tess "read my emails"   Execute single command
   tess --version          Show version (also: -version)
         """
@@ -339,6 +342,12 @@ Examples:
         help="Setup Google Gmail and Calendar integration"
     )
     
+    parser.add_argument(
+        "--notion-setup",
+        action="store_true",
+        help="Setup Notion integration"
+    )
+    
     args = parser.parse_args()
     
     # Version check
@@ -356,6 +365,14 @@ Examples:
         from .google_setup_wizard import run_google_setup
         success = run_google_setup()
         sys.exit(0 if success else 1)
+    
+    # Notion setup
+    if args.notion_setup:
+        console.print("\n[bold cyan]Notion Integration Setup[/bold cyan]\n")
+        from .core.notion_client import NotionClient
+        client = NotionClient()
+        console.print(client.get_setup_instructions())
+        sys.exit(0)
     
     # Settings menu
     if args.settings:

@@ -29,6 +29,14 @@ python-docx>=0.8.0      # DOCX handling
 docx2pdf>=0.1.0         # DOCX to PDF (Windows/Mac)
 PyPDF2>=3.0.0           # PDF handling
 
+# === Document AI (NEW) ===
+PyPDF2>=3.0.0           # PDF text extraction
+pytesseract>=0.3.10     # OCR for images
+# Note: Tesseract OCR engine must be installed separately
+# Windows: https://github.com/UB-Mannheim/tesseract/wiki
+# Mac: brew install tesseract
+# Linux: sudo apt install tesseract-ocr
+
 # === Google APIs ===
 google-auth>=2.0.0
 google-auth-oauthlib>=1.0.0
