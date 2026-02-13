@@ -15,7 +15,8 @@ class LLMConfig:
     """LLM provider configuration."""
     provider: str = "groq"
     model: str = "llama-3.3-70b-versatile"
-    api_keys: Dict[str, str] = field(default_factory=dict)
+    # api_keys format: {"provider": ["key1", "key2", ...]} for multiple keys per provider
+    api_keys: Dict[str, List[str]] = field(default_factory=dict)
     temperature: float = 0.1
     max_tokens: int = 2048
     backup_providers: List[str] = field(default_factory=lambda: ["deepseek", "gemini"])
@@ -215,13 +216,86 @@ class ConfigManager:
             print(f"❌ Error saving config: {e}")
             return False
     
-    def get_api_key(self, provider: str) -> Optional[str]:
-        """Get API key for a specific provider."""
-        return self.config.llm.api_keys.get(provider.lower())
+    def get_api_key(self, provider: str, index: int = 0) -> Optional[str]:
+        """
+        Get API key for a specific provider.
+        Returns the key at the specified index (default: first key).
+        Supports backward compatibility with old single-key format.
+        """
+        provider = provider.lower()
+        keys = self.config.llm.api_keys.get(provider)
+        
+        if not keys:
+            return None
+        
+        # Handle backward compatibility: convert single string to list
+        if isinstance(keys, str):
+            self.config.llm.api_keys[provider] = [keys]
+            return keys
+        
+        # Handle list format
+        if isinstance(keys, list) and 0 <= index < len(keys):
+            return keys[index]
+        
+        return None
+    
+    def get_all_api_keys(self, provider: str) -> List[str]:
+        """Get all API keys for a specific provider."""
+        provider = provider.lower()
+        keys = self.config.llm.api_keys.get(provider, [])
+        
+        # Handle backward compatibility: convert single string to list
+        if isinstance(keys, str):
+            return [keys]
+        
+        return keys if isinstance(keys, list) else []
     
     def set_api_key(self, provider: str, key: str):
-        """Set API key for a specific provider."""
-        self.config.llm.api_keys[provider.lower()] = key
+        """
+        Set API key for a specific provider (replaces all keys).
+        Use add_api_key() to add additional keys.
+        """
+        self.config.llm.api_keys[provider.lower()] = [key]
+    
+    def add_api_key(self, provider: str, key: str) -> bool:
+        """
+        Add an additional API key for a specific provider.
+        Returns True if added successfully.
+        """
+        provider = provider.lower()
+        existing = self.config.llm.api_keys.get(provider, [])
+        
+        # Handle backward compatibility
+        if isinstance(existing, str):
+            existing = [existing]
+        elif not isinstance(existing, list):
+            existing = []
+        
+        # Don't add duplicates
+        if key not in existing:
+            self.config.llm.api_keys[provider] = existing + [key]
+            return True
+        return False
+    
+    def remove_api_key(self, provider: str, index: int) -> bool:
+        """
+        Remove an API key at the specified index for a provider.
+        Returns True if removed successfully.
+        """
+        provider = provider.lower()
+        keys = self.config.llm.api_keys.get(provider, [])
+        
+        if isinstance(keys, str):
+            if index == 0:
+                self.config.llm.api_keys[provider] = []
+                return True
+            return False
+        
+        if isinstance(keys, list) and 0 <= index < len(keys):
+            keys.pop(index)
+            self.config.llm.api_keys[provider] = keys
+            return True
+        return False
     
     def validate_api_key(self, provider: str, key: str) -> tuple[bool, str]:
         """

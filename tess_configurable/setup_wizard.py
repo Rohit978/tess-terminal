@@ -133,19 +133,34 @@ class SetupWizard:
             
             default_yes = (provider == primary)
             if Confirm.ask(f"Configure {provider} now?", default=default_yes):
-                key = self._visible_input(f"Enter {provider} API key")
-                
-                if key:
-                    is_valid, msg = self.config.validate_api_key(provider, key)
-                    if is_valid:
-                        self.config.set_api_key(provider, key)
-                        keys_configured += 1
-                        console.print(f"[green]✓ {provider} key configured[/green]")
-                    else:
-                        console.print(f"[yellow]⚠ {msg}[/yellow]")
-                        if Confirm.ask("Save anyway?"):
-                            self.config.set_api_key(provider, key)
+                key_num = 1
+                while True:
+                    key_prompt = f"Enter {provider} API key #{key_num}" if key_num > 1 else f"Enter {provider} API key"
+                    key = self._visible_input(key_prompt)
+                    
+                    if key:
+                        is_valid, msg = self.config.validate_api_key(provider, key)
+                        if is_valid:
+                            if key_num == 1:
+                                self.config.set_api_key(provider, key)
+                            else:
+                                self.config.add_api_key(provider, key)
                             keys_configured += 1
+                            console.print(f"[green]✓ {provider} key #{key_num} configured[/green]")
+                        else:
+                            console.print(f"[yellow]⚠ {msg}[/yellow]")
+                            if Confirm.ask("Save anyway?"):
+                                if key_num == 1:
+                                    self.config.set_api_key(provider, key)
+                                else:
+                                    self.config.add_api_key(provider, key)
+                                keys_configured += 1
+                        
+                        # Ask if user wants to add another key for this provider
+                        if Confirm.ask(f"Add another {provider} key for rotation?", default=False):
+                            key_num += 1
+                            continue
+                    break
         
         if keys_configured == 0:
             console.print("\n[red]✗ No API keys configured. TESS requires at least one.[/red]")

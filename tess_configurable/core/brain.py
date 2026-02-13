@@ -29,6 +29,7 @@ from .schemas import TessAction
 class Brain:
     """
     Handles LLM interactions with multi-provider support.
+    Supports key rotation for same-provider failover.
     Adapted for configurable edition.
     """
     
@@ -45,16 +46,99 @@ class Brain:
         # Provider state
         self.current_provider = self.config.llm.provider.lower()
         self.current_model = self.config.llm.model
-        self.api_keys = self.config.llm.api_keys.copy()
+        
+        # Key rotation state: track current key index per provider
+        self._key_indices: Dict[str, int] = {}
+        self._exhausted_keys: Dict[str, set] = {}  # Track exhausted keys per provider
         
         # Initialize primary client
         self._init_clients()
         
+    def _get_current_key(self, provider: str) -> Optional[str]:
+        """Get the current key for a provider, accounting for rotation."""
+        provider = provider.lower()
+        keys = self.config_mgr.get_all_api_keys(provider)
+        
+        if not keys:
+            return None
+        
+        # Get current index (default to 0)
+        idx = self._key_indices.get(provider, 0)
+        
+        # Ensure index is within bounds
+        if idx >= len(keys):
+            idx = 0
+            self._key_indices[provider] = 0
+        
+        return keys[idx] if idx < len(keys) else None
+    
+    def _rotate_key(self, provider: str) -> bool:
+        """
+        Rotate to the next available key for the same provider.
+        Returns True if a new key is available, False if all keys exhausted.
+        """
+        provider = provider.lower()
+        keys = self.config_mgr.get_all_api_keys(provider)
+        
+        if len(keys) <= 1:
+            return False  # No rotation possible with 0 or 1 key
+        
+        # Initialize exhausted set for this provider
+        if provider not in self._exhausted_keys:
+            self._exhausted_keys[provider] = set()
+        
+        # Mark current key as exhausted
+        current_idx = self._key_indices.get(provider, 0)
+        self._exhausted_keys[provider].add(current_idx)
+        
+        # Find next non-exhausted key
+        for i in range(len(keys)):
+            next_idx = (current_idx + 1 + i) % len(keys)
+            if next_idx not in self._exhausted_keys[provider]:
+                self._key_indices[provider] = next_idx
+                print(f"[Brain] Rotated to key {next_idx + 1}/{len(keys)} for {provider}")
+                self._reinit_client(provider)
+                return True
+        
+        # All keys exhausted for this provider
+        print(f"[Brain] All keys exhausted for {provider}")
+        return False
+    
+    def _reset_key_rotation(self, provider: str):
+        """Reset key rotation state for a provider (e.g., after successful request)."""
+        provider = provider.lower()
+        if provider in self._exhausted_keys:
+            del self._exhausted_keys[provider]
+    
+    def _reinit_client(self, provider: str):
+        """Reinitialize client with current key for provider."""
+        provider = provider.lower()
+        key = self._get_current_key(provider)
+        
+        if not key:
+            return
+        
+        try:
+            if provider == "groq":
+                self.client = Groq(api_key=key)
+            elif provider == "openai":
+                self.client = OpenAI(api_key=key)
+            elif provider == "deepseek":
+                self.client = OpenAI(api_key=key, base_url="https://api.deepseek.com")
+            elif provider == "gemini":
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    genai.configure(api_key=key)
+                    self.gemini_client = genai.GenerativeModel(self.current_model)
+        except Exception as e:
+            print(f"[Brain] Failed to reinit {provider}: {e}")
+    
     def _init_clients(self):
         """Initialize LLM clients based on configuration."""
         # Try to initialize primary provider
         provider = self.current_provider
-        key = self.config_mgr.get_api_key(provider)
+        key = self._get_current_key(provider)
         
         if provider == "groq" and key:
             try:
@@ -90,7 +174,7 @@ class Brain:
     def _init_backup_clients(self):
         """Initialize backup LLM clients."""
         # DeepSeek backup
-        ds_key = self.config_mgr.get_api_key("deepseek")
+        ds_key = self._get_current_key("deepseek")
         if ds_key and self.current_provider != "deepseek":
             try:
                 self.deepseek_client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com")
@@ -98,7 +182,7 @@ class Brain:
                 pass
         
         # Gemini backup
-        gem_key = self.config_mgr.get_api_key("gemini")
+        gem_key = self._get_current_key("gemini")
         if gem_key and self.current_provider != "gemini":
             try:
                 import warnings
@@ -112,10 +196,14 @@ class Brain:
     def _switch_provider(self, new_provider: str) -> bool:
         """Switch to a different provider."""
         new_provider = new_provider.lower()
-        key = self.config_mgr.get_api_key(new_provider)
+        key = self._get_current_key(new_provider)
         
         if not key:
             return False
+        
+        # Reset key rotation for the new provider
+        self._reset_key_rotation(new_provider)
+        self._key_indices[new_provider] = 0
         
         if new_provider == "groq":
             self.client = Groq(api_key=key)
@@ -172,18 +260,29 @@ class Brain:
             {"role": "user", "content": user_query}
         ]
         
-        # Try request with failover
-        max_retries = 3
+        # Try request with key rotation and provider failover
+        max_retries = 6  # Increased to allow for key rotation + provider failover
         for attempt in range(max_retries):
             try:
                 raw_response = self._request_completion(messages)
                 if raw_response:
+                    # Reset key rotation on success
+                    self._reset_key_rotation(self.current_provider)
                     break
             except Exception as e:
                 err_str = str(e).lower()
-                if "rate limit" in err_str or "429" in err_str or "401" in err_str:
+                # Check for rate limit or auth errors
+                if "rate limit" in err_str or "429" in err_str or "401" in err_str or "quota" in err_str:
+                    # First try rotating to next key for same provider
+                    if self._rotate_key(self.current_provider):
+                        print(f"[Brain] Retrying with rotated key for {self.current_provider}")
+                        continue
+                    # If all keys exhausted, try next provider
                     if self._try_next_provider():
                         continue
+                # For other errors, try a different provider
+                elif attempt < 2 and self._try_next_provider():
+                    continue
                 if attempt == max_retries - 1:
                     return {"action": "error", "reason": f"All providers failed: {e}"}
         else:

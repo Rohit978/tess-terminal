@@ -98,11 +98,19 @@ class SettingsMenu:
             table = Table(title="Configured Providers", box=box.ROUNDED)
             table.add_column("Provider", style="cyan")
             table.add_column("Status", style="green")
+            table.add_column("Keys", style="magenta")
             table.add_column("Model", style="yellow")
             
             for provider in ["groq", "openai", "deepseek", "gemini"]:
-                key = self.config.get_api_key(provider)
-                status = "[green]✓ Configured[/green]" if key else "[red]✗ Not set[/red]"
+                keys = self.config.get_all_api_keys(provider)
+                key_count = len(keys)
+                
+                if key_count > 0:
+                    status = f"[green]✓ Configured[/green]"
+                    key_status = f"[green]{key_count} key{'s' if key_count > 1 else ''}[/green]"
+                else:
+                    status = "[red]✗ Not set[/red]"
+                    key_status = "[red]-[/red]"
                 
                 if provider == self.config.config.llm.provider:
                     model = self.config.config.llm.model
@@ -110,29 +118,32 @@ class SettingsMenu:
                 else:
                     model = "-"
                     
-                table.add_row(provider.upper(), status, model)
+                table.add_row(provider.upper(), status, key_status, model)
             
             console.print(table)
             
             console.print("\n[bold]Options:[/bold]")
             console.print("  [1] Change primary provider")
-            console.print("  [2] Add/Update API key")
-            console.print("  [3] Change model")
-            console.print("  [4] Remove API key")
+            console.print("  [2] Add API key (for rotation)")
+            console.print("  [3] Replace API keys")
+            console.print("  [4] Manage keys (view/remove)")
+            console.print("  [5] Change model")
             console.print("  [0] Back to main menu")
             
-            choice = Prompt.ask("Select", choices=["1", "2", "3", "4", "0"], default="0")
+            choice = Prompt.ask("Select", choices=["1", "2", "3", "4", "5", "0"], default="0")
             
             if choice == "0":
                 break
             elif choice == "1":
                 self._change_primary_provider()
             elif choice == "2":
-                self._update_api_key()
+                self._add_api_key()
             elif choice == "3":
-                self._change_model()
+                self._replace_api_keys()
             elif choice == "4":
-                self._remove_api_key()
+                self._manage_keys()
+            elif choice == "5":
+                self._change_model()
     
     def _change_primary_provider(self):
         """Change the primary LLM provider."""
@@ -155,15 +166,105 @@ class SettingsMenu:
         console.print(f"[green]✓ Primary provider changed to {new_provider.upper()}[/green]")
         input("\nPress Enter to continue...")
     
-    def _update_api_key(self):
-        """Update an API key."""
+    def _add_api_key(self):
+        """Add an additional API key for rotation."""
         provider = Prompt.ask(
             "Which provider?",
             choices=["groq", "openai", "deepseek", "gemini"]
         )
-        self._prompt_for_key(provider)
+        
+        # Check if already has keys
+        existing = self.config.get_all_api_keys(provider)
+        if existing:
+            console.print(f"[dim]{provider} has {len(existing)} key(s) already. Adding another for rotation.[/dim]")
+        
+        self._prompt_for_key(provider, add_mode=True)
     
-    def _prompt_for_key(self, provider: str):
+    def _replace_api_keys(self):
+        """Replace all API keys for a provider."""
+        provider = Prompt.ask(
+            "Which provider?",
+            choices=["groq", "openai", "deepseek", "gemini"]
+        )
+        
+        # Show existing keys
+        existing = self.config.get_all_api_keys(provider)
+        if existing:
+            console.print(f"[yellow]⚠ This will replace {len(existing)} existing key(s)[/yellow]")
+            if not Confirm.ask("Continue?"):
+                return
+        
+        self._prompt_for_key(provider, add_mode=False)
+    
+    def _manage_keys(self):
+        """View and remove individual API keys."""
+        provider = Prompt.ask(
+            "Which provider?",
+            choices=["groq", "openai", "deepseek", "gemini"]
+        )
+        
+        keys = self.config.get_all_api_keys(provider)
+        
+        if not keys:
+            console.print(f"[yellow]No keys configured for {provider}[/yellow]")
+            input("\nPress Enter to continue...")
+            return
+        
+        while True:
+            self._clear_screen()
+            console.print(f"\n[bold]{provider.upper()} Keys[/bold]\n")
+            
+            table = Table(box=box.ROUNDED)
+            table.add_column("#", style="cyan")
+            table.add_column("Key Preview", style="green")
+            table.add_column("Status", style="yellow")
+            
+            for i, key in enumerate(keys, 1):
+                # Mask key for display
+                masked = key[:6] + "..." + key[-4:] if len(key) > 12 else "****"
+                status = "[green]Active[/green]" if i == 1 else "[dim]Rotation[/dim]"
+                table.add_row(str(i), masked, status)
+            
+            console.print(table)
+            console.print("\n[bold]Options:[/bold]")
+            console.print("  [1] Remove a key")
+            console.print("  [2] Test all keys")
+            console.print("  [0] Back")
+            
+            choice = Prompt.ask("Select", choices=["1", "2", "0"], default="0")
+            
+            if choice == "0":
+                break
+            elif choice == "1":
+                if len(keys) == 1:
+                    if Confirm.ask(f"Remove the only key for {provider}?", default=False):
+                        self.config.config.llm.api_keys[provider] = []
+                        console.print(f"[green]✓ Key removed[/green]")
+                        break
+                else:
+                    idx = int(Prompt.ask("Remove key #", choices=[str(i) for i in range(1, len(keys)+1)])) - 1
+                    if self.config.remove_api_key(provider, idx):
+                        keys = self.config.get_all_api_keys(provider)
+                        console.print(f"[green]✓ Key removed[/green]")
+            elif choice == "2":
+                self._test_provider_keys(provider)
+    
+    def _test_provider_keys(self, provider: str):
+        """Test all keys for a provider."""
+        console.print(f"\n[dim]Testing {provider} keys...[/dim]")
+        keys = self.config.get_all_api_keys(provider)
+        
+        for i, key in enumerate(keys, 1):
+            # Simple validation check
+            is_valid, msg = self.config.validate_api_key(provider, key)
+            if is_valid:
+                console.print(f"  Key {i}: [green]✓ Valid format[/green]")
+            else:
+                console.print(f"  Key {i}: [red]✗ {msg}[/red]")
+        
+        input("\nPress Enter to continue...")
+    
+    def _prompt_for_key(self, provider: str, add_mode: bool = False):
         """Prompt for and validate an API key."""
         console.print(f"\n[dim]Get your key from:[/dim] {self._get_key_url(provider)}")
         console.print("[dim]Type or paste your key (input is visible for easier editing)[/dim]")
@@ -178,37 +279,25 @@ class SettingsMenu:
         if key:
             is_valid, msg = self.config.validate_api_key(provider, key)
             if is_valid:
-                self.config.set_api_key(provider, key)
-                console.print(f"[green]✓ {provider} key updated[/green]")
+                if add_mode:
+                    if self.config.add_api_key(provider, key):
+                        console.print(f"[green]✓ {provider} key added for rotation[/green]")
+                    else:
+                        console.print(f"[yellow]⚠ Key already exists[/yellow]")
+                else:
+                    self.config.set_api_key(provider, key)
+                    console.print(f"[green]✓ {provider} key updated[/green]")
             else:
                 console.print(f"[yellow]⚠ {msg}[/yellow]")
                 if Confirm.ask("Save anyway?"):
-                    self.config.set_api_key(provider, key)
-                    console.print(f"[green]✓ {provider} key saved[/green]")
+                    if add_mode:
+                        if self.config.add_api_key(provider, key):
+                            console.print(f"[green]✓ {provider} key saved[/green]")
+                    else:
+                        self.config.set_api_key(provider, key)
+                        console.print(f"[green]✓ {provider} key saved[/green]")
         
         input("\nPress Enter to continue...")
-    
-    def _remove_api_key(self):
-        """Remove an API key."""
-        configured = [p for p in ["groq", "openai", "deepseek", "gemini"] 
-                     if self.config.get_api_key(p)]
-        
-        if not configured:
-            console.print("[yellow]No keys configured to remove[/yellow]")
-            input("\nPress Enter to continue...")
-            return
-        
-        console.print("\nConfigured providers:")
-        for i, p in enumerate(configured, 1):
-            console.print(f"  [{i}] {p.upper()}")
-        
-        choice = int(Prompt.ask("Select to remove", choices=[str(i) for i in range(1, len(configured)+1)])) - 1
-        provider = configured[choice]
-        
-        if Confirm.ask(f"Remove {provider} key?", default=False):
-            if provider in self.config.config.llm.api_keys:
-                del self.config.config.llm.api_keys[provider]
-                console.print(f"[green]✓ {provider} key removed[/green]")
     
     def _change_model(self):
         """Change the model for current provider."""
