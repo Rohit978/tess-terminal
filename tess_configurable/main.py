@@ -290,6 +290,8 @@ def main():
             sys.argv[i] = '--google-setup'
         elif arg in ('-notion-setup', '-n'):
             sys.argv[i] = '--notion-setup'
+        elif arg in ('-telegram-setup', '-t'):
+            sys.argv[i] = '--telegram-setup'
     
     parser = argparse.ArgumentParser(
         description="TESS Terminal - Configurable AI Agent",
@@ -301,6 +303,7 @@ Examples:
   tess --settings         Open settings menu (also: -settings)
   tess --google-setup     Setup Gmail and Calendar
   tess --notion-setup     Setup Notion integration
+  tess --telegram-setup   Setup Telegram bot
   tess "read my emails"   Execute single command
   tess --version          Show version (also: -version)
         """
@@ -348,6 +351,12 @@ Examples:
         help="Setup Notion integration"
     )
     
+    parser.add_argument(
+        "--telegram-setup",
+        action="store_true",
+        help="Setup Telegram bot"
+    )
+    
     args = parser.parse_args()
     
     # Version check
@@ -373,6 +382,12 @@ Examples:
         client = NotionClient()
         console.print(client.get_setup_instructions())
         sys.exit(0)
+    
+    # Telegram setup
+    if args.telegram_setup:
+        from .telegram_setup_wizard import run_telegram_setup
+        success = run_telegram_setup()
+        sys.exit(0 if success else 1)
     
     # Settings menu
     if args.settings:
