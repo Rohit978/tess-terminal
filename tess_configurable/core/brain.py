@@ -11,11 +11,11 @@ try:
     from groq import Groq
     from openai import OpenAI
     try:
-    from google import genai
-    GENAI_NEW = True
-except ImportError:
-    import google.generativeai as genai
-    GENAI_NEW = False
+        from google import genai
+        GENAI_NEW = True
+    except ImportError:
+        import google.generativeai as genai
+        GENAI_NEW = False
     from pydantic import TypeAdapter, ValidationError
 except ImportError as e:
     print(f"Missing dependency: {e}")
