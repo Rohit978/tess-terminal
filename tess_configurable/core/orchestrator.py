@@ -691,7 +691,12 @@ class Orchestrator:
         if sub == "send":
             msg = action.get("message", "")
             output(f"[WHATSAPP] Sending to {contact}...")
-            result = client.send_message(contact, msg)
+            # Use sync wrapper for async method
+            if hasattr(client, 'send_message_sync'):
+                result = client.send_message_sync(contact, msg)
+            else:
+                # Fallback for older clients
+                result = client.send_message(contact, msg)
             output(f"[TESS] {result}")
             return result
         elif sub == "monitor":
