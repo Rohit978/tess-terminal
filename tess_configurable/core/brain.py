@@ -324,19 +324,25 @@ VALID ACTIONS:
 - execute_command: {{"command": "shell command"}}
 - browser_control: {{"sub_action": "new_tab|close_tab|next_tab|prev_tab|go_to_url", "url": "..."}}
 - system_control: {{"sub_action": "volume_up|volume_down|mute|play_pause|screenshot|list_processes"}}
-- file_op: {{"sub_action": "read|write|list|patch", "path": "...", "content": "..."}}
+- file_op: {{"sub_action": "read|write|list|patch|analyze", "path": "...", "content": "..."}}
 - web_search_op: {{"query": "search terms"}}
 - whatsapp_op: {{"sub_action": "monitor|send|stop", "contact": "...", "message": "..."}}
 - youtube_op: {{"sub_action": "play|pause|next", "query": "..."}}
 - reply_op: {{"content": "response text"}}
 - planner_op: {{"goal": "task description"}}
+- trip_planner_op: {{"destination": "...", "dates": "...", "budget": "..."}}
 - research_op: {{"topic": "...", "depth": 3}}
+- document_op: {{"sub_action": "extract_text|summarize|ocr", "path": "..."}}
+- organize_op: {{"path": "...", "criteria": "type|date|size"}}
 
 SECURITY LEVEL: {self.config.security.level}
 SAFE MODE: {'ON' if self.config.security.safe_mode else 'OFF'}
 
 IMPORTANT:
 - For questions or conversations, use "reply_op"
+- For trip planning, use "trip_planner_op" NOT "execute_command"
+- For research, use "research_op" NOT "execute_command"  
+- For document analysis, use "document_op"
 - For missing info, ask rather than guess
 - Flag dangerous operations with is_dangerous: true"""
     

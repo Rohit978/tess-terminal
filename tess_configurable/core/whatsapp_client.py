@@ -34,8 +34,20 @@ class WhatsAppClient:
             # WhatsApp needs visible browser for QR scan
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--disable-extensions")
+            options.add_argument("--disable-dev-tools")
+            options.add_argument("--remote-debugging-port=0")
+            
             # Keep user data for session persistence
-            options.add_argument("--user-data-dir=./.whatsapp_session")
+            from pathlib import Path
+            user_data = Path.home() / ".tess" / "whatsapp_session"
+            user_data.mkdir(parents=True, exist_ok=True)
+            options.add_argument(f"--user-data-dir={user_data}")
+            
+            # Additional stability options
+            options.add_experimental_option('excludeSwitches', ['enable-logging'])
+            options.add_experimental_option('useAutomationExtension', False)
             
             service = Service(ChromeDriverManager().install())
             self.driver = webdriver.Chrome(service=service, options=options)

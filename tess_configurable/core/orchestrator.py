@@ -392,17 +392,51 @@ class Orchestrator:
         sub = action.get("sub_action", "")
         path = os.path.expanduser(action.get("path", ""))
         
+        # Check if path exists
+        if not os.path.exists(path):
+            return f"Path not found: {path}"
+        
+        # Handle directories vs files
+        is_directory = os.path.isdir(path)
+        
         if sub == "list":
             result = self.files.list_dir(path)
             output(f"[FILES]\n{result}")
         elif sub == "read":
-            result = self.files.read_file(path)
-            output(f"[CONTENT]\n{result[:1000]}...")
+            if is_directory:
+                # For directories, show contents instead of error
+                result = self.files.list_dir(path)
+                output(f"[DIRECTORY: {path}]\n{result}")
+            else:
+                result = self.files.read_file(path)
+                output(f"[CONTENT]\n{result[:1000]}...")
+        elif sub == "analyze":
+            # New: analyze files in directory or single file
+            if is_directory:
+                from .document_ai import DocumentAI
+                doc_ai = DocumentAI(brain)
+                results = doc_ai.batch_process(path)
+                output(f"[ANALYZED {len(results)} files in {path}]")
+                for name, content in list(results.items())[:5]:
+                    output(f"  {name}: {content[:100]}...")
+                result = f"Analyzed {len(results)} files"
+            else:
+                # Single file analysis
+                from .document_ai import DocumentAI
+                doc_ai = DocumentAI(brain)
+                result = doc_ai.summarize_document(path)
+                output(f"[ANALYSIS]\n{result}")
         elif sub == "write":
-            result = self.files.write_file(path, action.get("content", ""))
+            if is_directory:
+                result = "Cannot write to a directory"
+            else:
+                result = self.files.write_file(path, action.get("content", ""))
             output(f"[TESS] {result}")
         elif sub == "patch":
-            result = self.files.patch_file(path, action.get("search_text", ""), action.get("replace_text", ""))
+            if is_directory:
+                result = "Cannot patch a directory"
+            else:
+                result = self.files.patch_file(path, action.get("search_text", ""), action.get("replace_text", ""))
             output(f"[TESS] {result}")
         else:
             result = f"Unknown file action: {sub}"
