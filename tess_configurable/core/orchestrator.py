@@ -465,16 +465,24 @@ class Orchestrator:
         query = action.get("query", "")
         output(f"[TESS] Searching: {query}")
         
-        # Try to use WebBrowser if available
-        if "web_browser" in self.components and self.config.features.web_search:
-            try:
-                result = self.components["web_browser"].search(query)
-                output(f"[RESULTS]\n{result[:800]}")
-                return result
-            except Exception as e:
-                output(f"Search error: {e}")
+        # Try Playwright WebSearch first (better results)
+        try:
+            from .playwright_browser import WebSearchPlaywright
+            searcher = WebSearchPlaywright()
+            result = searcher.search_sync(query)
+            output(f"[RESULTS]\n{result[:800]}")
+            return result
+        except Exception as e:
+            # Fallback to browser component
+            if "web_browser" in self.components and self.config.features.web_search:
+                try:
+                    result = self.components["web_browser"].search(query)
+                    output(f"[RESULTS]\n{result[:800]}")
+                    return result
+                except Exception as e2:
+                    output(f"Search error: {e2}")
         
-        # Fallback: open in browser
+        # Final fallback: open in browser
         import webbrowser
         import urllib.parse
         webbrowser.open(f"https://www.google.com/search?q={urllib.parse.quote(query)}")
@@ -670,8 +678,13 @@ class Orchestrator:
         contact = action.get("contact", "")
         
         if "whatsapp_client" not in self.components:
-            from .whatsapp_client import WhatsAppClient
-            self.components["whatsapp_client"] = WhatsAppClient(brain)
+            # Try Playwright first (more reliable), fallback to Selenium
+            try:
+                from .playwright_browser import WhatsAppPlaywright
+                self.components["whatsapp_client"] = WhatsAppPlaywright(brain)
+            except ImportError:
+                from .whatsapp_client import WhatsAppClient
+                self.components["whatsapp_client"] = WhatsAppClient(brain)
         
         client = self.components["whatsapp_client"]
         
@@ -756,8 +769,13 @@ class Orchestrator:
         sub = action.get("sub_action", "")
         
         if "youtube_client" not in self.components:
-            from .youtube_client import YouTubeClient
-            self.components["youtube_client"] = YouTubeClient(headless=False)
+            # Try Playwright first for better reliability
+            try:
+                from .playwright_browser import PlaywrightBrowser
+                self.components["youtube_client"] = PlaywrightBrowser(headless=False)
+            except ImportError:
+                from .youtube_client import YouTubeClient
+                self.components["youtube_client"] = YouTubeClient(headless=False)
         
         client = self.components["youtube_client"]
         
@@ -829,10 +847,15 @@ class Orchestrator:
         
         from ..skills.research import ResearchSkill
         
-        # Ensure web browser
+        # Ensure web browser - use Playwright by default
         if "web_browser" not in self.components:
-            from .web_browser import WebBrowser
-            self.components["web_browser"] = WebBrowser()
+            try:
+                from .playwright_browser import PlaywrightBrowser
+                self.components["web_browser"] = PlaywrightBrowser()
+            except ImportError:
+                # Fallback to Selenium
+                from .web_browser import WebBrowser
+                self.components["web_browser"] = WebBrowser()
         
         researcher = ResearchSkill(brain, self.components["web_browser"])
         

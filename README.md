@@ -283,6 +283,19 @@ tess --setup
 pip install --upgrade -r requirements.txt
 ```
 
+### Playwright not found
+```bash
+pip install playwright
+playwright install chromium
+```
+
+### WhatsApp/Chrome crashes
+TESS now uses **Playwright** (modern browser automation) by default instead of Selenium.
+```bash
+# Install Playwright browsers
+playwright install chromium
+```
+
 ### Reset everything
 ```bash
 tess --reset
