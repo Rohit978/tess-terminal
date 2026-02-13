@@ -287,12 +287,19 @@ class SetupWizard:
         
         # Telegram
         if Confirm.ask("Configure Telegram Bot?", default=False):
-            import getpass
             console.print("[dim]Get bot token from @BotFather on Telegram[/dim]")
+            console.print("[dim]Type or paste your token (input is hidden)[/dim]")
+            
             try:
+                import getpass
                 token = getpass.getpass("Bot Token: ")
-            except:
-                token = input("Bot Token: ")
+                if token:
+                    masked = token[:6] + "****" if len(token) > 6 else "****"
+                    console.print(f"[dim]Token received: {masked}[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]Secure input error: {e}[/yellow]")
+                token = input("Bot Token (visible): ")
+            
             user_id = Prompt.ask("Your Telegram User ID")
             
             self.config.config.telegram_token = token
@@ -310,12 +317,30 @@ class SetupWizard:
             f.web_port = int(port)
     
     def _secure_input(self, prompt: str) -> str:
-        """Get secure input (hidden)."""
-        import getpass
+        """Get secure input with visual feedback."""
+        import sys
+        
+        console.print(f"\n[cyan]{prompt}[/cyan]")
+        console.print("[dim]Tip: Type or paste your key (input is hidden for security)[/dim]")
+        console.print("[dim]Press Enter when done...[/dim]\n")
+        
         try:
-            return getpass.getpass(f"{prompt}: ")
-        except:
-            return input(f"{prompt} (will be hidden): ")
+            # Use getpass for security but show it's working
+            import getpass
+            key = getpass.getpass("Key: ")
+            
+            # Show feedback that something was entered
+            if key:
+                masked = key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
+                console.print(f"[green]✓ Received: {masked}[/green]")
+            
+            return key
+            
+        except Exception as e:
+            # Fallback to visible input if getpass fails
+            console.print("[yellow]⚠ Secure input not available, using regular input[/yellow]")
+            key = input(f"{prompt}: ")
+            return key
     
     def _get_key_url(self, provider: str) -> str:
         """Get URL for API key generation."""
