@@ -433,6 +433,7 @@ VALID ACTIONS:
 - research_op: {{"topic": "...", "depth": 3}}
 - document_op: {{"sub_action": "extract_text|summarize|ocr", "path": "..."}}
 - organize_op: {{"path": "...", "criteria": "type|date|size"}}
+- converter_op: {{"sub_action": "images_to_pdf|docx_to_pdf", "source_paths": ["path1", "path2"], "output_filename": "..."}}
 
 SECURITY LEVEL: {self.config.security.level}
 SAFE MODE: {'ON' if self.config.security.safe_mode else 'OFF'}
@@ -442,6 +443,7 @@ IMPORTANT:
 - For trip planning, use "trip_planner_op" NOT "execute_command"
 - For research, use "research_op" NOT "execute_command"  
 - For document analysis, use "document_op"
+- For image/PDF conversion, use "converter_op" NOT "execute_command"
 - For missing info, ask rather than guess
 - Flag dangerous operations with is_dangerous: true"""
     
