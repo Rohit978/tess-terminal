@@ -113,11 +113,14 @@ You: search for python tutorials
 ### CLI Options
 
 ```bash
-tess --setup          # Run configuration wizard
-tess --settings       # Open settings menu
-tess --reset          # Reset to defaults
-tess --version        # Show version
-tess "your command"   # Execute single command
+tess --setup             # Run main configuration wizard
+tess --settings          # Open settings menu
+tess --google-setup      # Setup Gmail and Calendar
+tess --notion-setup      # Setup Notion integration
+tess --telegram-setup    # Setup Telegram bot
+tess --reset             # Reset to defaults
+tess --version           # Show version
+tess "your command"      # Execute single command
 ```
 
 ---
@@ -134,6 +137,51 @@ TESS works with multiple LLM providers. **Groq is recommended** (free & fast):
 | **OpenAI** | [platform.openai.com](https://platform.openai.com/api-keys) | ❌ Paid |
 
 > 💡 **Tip**: Add multiple keys for automatic failover!
+
+---
+
+## 🔌 Integrations
+
+TESS supports integrations with popular services. Each has an interactive setup wizard:
+
+### 📧 Gmail & Calendar
+
+```bash
+tess --google-setup
+```
+
+This wizard will guide you through:
+1. Creating a Google Cloud project
+2. Enabling Gmail and Calendar APIs
+3. Creating OAuth credentials
+4. Authenticating with your Google account
+
+### 📝 Notion
+
+```bash
+tess --notion-setup
+```
+
+Steps:
+1. Create a Notion integration at notion.so/my-integrations
+2. Copy the Internal Integration Token
+3. Share your databases/pages with the integration
+4. Configure default parent page (optional)
+
+### 💬 Telegram Bot
+
+```bash
+tess --telegram-setup
+```
+
+Steps:
+1. Message @BotFather on Telegram
+2. Create a new bot with `/newbot`
+3. Copy the API token
+4. Get your User ID from @userinfobot
+5. TESS saves the configuration
+
+Once set up, you can control TESS remotely via Telegram!
 
 ---
 
@@ -160,14 +208,55 @@ You: config
 
 ```
 tess_configurable/
-├── config_manager.py      # Settings persistence
-├── setup_wizard.py        # First-time setup TUI
-├── settings_menu.py       # Configuration menu
-├── main.py                # Entry point & CLI
+├── config_manager.py         # Settings persistence
+├── setup_wizard.py           # First-time setup TUI
+├── settings_menu.py          # Configuration menu
+├── google_setup_wizard.py    # Google OAuth setup
+├── telegram_setup_wizard.py  # Telegram bot setup
+├── main.py                   # Entry point & CLI
 └── core/
-    ├── brain.py           # Multi-provider LLM
-    ├── orchestrator.py    # Action routing
-    └── schemas.py         # Data validation
+    ├── brain.py              # Multi-provider LLM
+    ├── orchestrator.py       # Action routing
+    ├── schemas.py            # Data validation
+    ├── document_ai.py        # PDF/OCR processing
+    ├── workflow_engine.py    # Automation
+    ├── preference_memory.py  # User learning
+    ├── notion_client.py      # Notion API
+    ├── google_client.py      # Gmail/Calendar
+    ├── whatsapp_client.py    # WhatsApp Web
+    └── ...
+└── skills/
+    ├── research.py           # Deep research
+    ├── trip_planner.py       # Travel planning
+    └── converter.py          # File conversion
+```
+
+---
+
+## 🧠 Smart Features
+
+### Document AI
+Extract and analyze documents:
+```bash
+tess "extract text from report.pdf"
+tess "summarize document.pdf"
+tess "read text from image.png"
+```
+
+### Workflow Automation
+Create automated routines:
+```bash
+tess "create morning routine"
+tess "run focus mode"
+tess "list my workflows"
+```
+
+### Preference Memory
+TESS learns your preferences:
+```bash
+You: I prefer Chrome over Firefox
+You: My name is John
+You: I work 9 to 5
 ```
 
 ---
