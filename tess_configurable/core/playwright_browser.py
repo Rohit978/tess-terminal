@@ -4,6 +4,8 @@ Replaces Selenium with Playwright for better reliability.
 """
 
 import asyncio
+import os
+import time
 from typing import Optional, Dict, Any
 from pathlib import Path
 
@@ -23,7 +25,7 @@ class PlaywrightBrowser:
     
     async def _init(self):
         """Initialize Playwright."""
-        if self.browser:
+        if self.context:  # FIX: Check context, not browser
             return
         
         try:
@@ -47,15 +49,17 @@ class PlaywrightBrowser:
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
                     '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
+                    '--disable-blink-features=AutomationControlled',
                     '--no-first-run',
-                    '--no-zygote',
-                    '--single-process',
-                    '--disable-gpu'
+                    '--start-maximized'
                 ]
             )
             
-            self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
+            # FIX: Persistent context returns context directly, get page from it
+            if self.context.pages:
+                self.page = self.context.pages[0]
+            else:
+                self.page = await self.context.new_page()
             
         except ImportError:
             raise ImportError("Playwright not installed. Run: pip install playwright && playwright install chromium")
@@ -142,73 +146,128 @@ class PlaywrightBrowser:
 
 class WhatsAppPlaywright:
     """
-    WhatsApp Web using Playwright - more reliable than Selenium.
+    WhatsApp Web using Playwright - SYNC version based on working original.
+    Uses sync_playwright to avoid async/event loop issues.
     """
     
     def __init__(self, brain=None):
         self.brain = brain
-        self.browser = PlaywrightBrowser(headless=False)
         self.logged_in = False
+        self.browser = None
+        self.context = None
+        self.page = None
+        
+        # Setup user data directory for persistent login
+        from ..config_manager import get_config_manager
+        config = get_config_manager()
+        self.user_data_dir = str(Path(config.config.paths.data_dir) / "whatsapp_session")
+        os.makedirs(self.user_data_dir, exist_ok=True)
     
-    async def login(self) -> str:
+    def _init_browser(self):
+        """Initialize browser if not already done."""
+        if self.page:
+            return
+            
+        from playwright.sync_api import sync_playwright
+        
+        self.playwright = sync_playwright().start()
+        
+        # Launch persistent context (saves login session)
+        self.context = self.playwright.chromium.launch_persistent_context(
+            self.user_data_dir,
+            headless=False,
+            viewport={'width': 1280, 'height': 720},
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--start-maximized'
+            ],
+            permissions=['notifications', 'microphone', 'camera']
+        )
+        
+        # Get or create page
+        if self.context.pages:
+            self.page = self.context.pages[0]
+        else:
+            self.page = self.context.new_page()
+    
+    def login(self) -> str:
         """Login to WhatsApp Web."""
         try:
-            await self.browser.goto("https://web.whatsapp.com")
+            self._init_browser()
+            self.page.goto("https://web.whatsapp.com")
             
-            # Wait for QR code scan (user needs to scan)
-            # Check if logged in by looking for chat list
+            # Wait for login - check for search box (data-tab="3")
             try:
-                await self.browser.wait_for_selector('[data-testid="chat-list"]', timeout=60000)
+                self.page.wait_for_selector('div[contenteditable="true"][data-tab="3"]', timeout=45000)
                 self.logged_in = True
                 return "✓ Logged in successfully!"
             except Exception:
-                return "⚠ QR code not scanned within 60 seconds"
+                return "⚠ QR code not scanned. Please scan the QR code in the browser."
                 
         except Exception as e:
             return f"Login error: {e}"
     
-    async def send_message(self, contact: str, message: str) -> str:
+    def send_message(self, contact: str, message: str) -> str:
         """Send message to contact."""
         if not self.logged_in:
-            result = await self.login()
-            if "error" in result.lower():
+            result = self.login()
+            if "error" in result.lower() and "QR code" not in result.lower():
                 return result
         
         try:
-            # Search for contact
-            search_selector = '[data-testid="chat-list-search"]'  # or '[title="Search input textbox"]'
-            await self.browser.fill(search_selector, contact)
-            await asyncio.sleep(1)
+            # Search for contact using the working selector from original
+            search_box = self.page.locator('div[contenteditable="true"][data-tab="3"]')
+            search_box.click()
             
-            # Click on contact
-            contact_selector = f'span[title="{contact}"]'
-            await self.browser.click(contact_selector)
-            await asyncio.sleep(1)
+            # Clear existing text
+            self.page.keyboard.down("Control")
+            self.page.keyboard.press("a")
+            self.page.keyboard.up("Control")
+            self.page.keyboard.press("Backspace")
+            
+            # Type contact name
+            search_box.fill(contact)
+            import time
+            time.sleep(2)
+            
+            # Press Enter to open chat
+            self.page.keyboard.press("Enter")
+            time.sleep(2)
             
             # Type message
-            input_selector = '[data-testid="conversation-compose-box-input"]'  # or 'div[contenteditable="true"]'
-            await self.browser.type(input_selector, message)
+            self.page.keyboard.type(message)
+            time.sleep(0.5)
             
-            # Send (press Enter)
-            from playwright.async_api import async_playwright
-            page = self.browser.page
-            await page.press(input_selector, "Enter")
+            # Send
+            self.page.keyboard.press("Enter")
+            time.sleep(1)
             
             return f"✓ Message sent to {contact}"
             
         except Exception as e:
             return f"Send error: {e}"
     
-    async def close(self):
+    def close(self):
         """Close browser."""
-        await self.browser.close()
+        try:
+            if self.context:
+                self.context.close()
+        except:
+            pass
+        try:
+            if self.playwright:
+                self.playwright.stop()
+        except:
+            pass
+        self.page = None
+        self.context = None
     
-    # Sync wrappers
+    # Sync wrappers (for API compatibility)
     def login_sync(self) -> str:
-        return asyncio.run(self.login())
+        return self.login()
     
     def send_message_sync(self, contact: str, message: str) -> str:
-        return asyncio.run(self.send_message(contact, message))
+        return self.send_message(contact, message)
 
 
 class WebSearchPlaywright:
