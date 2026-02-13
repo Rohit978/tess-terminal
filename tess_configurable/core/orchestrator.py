@@ -1,0 +1,752 @@
+"""
+Orchestrator for TESS Configurable Edition.
+Routes actions to appropriate handlers.
+"""
+
+import os
+import subprocess
+import platform
+from typing import Dict, Any, Callable, Optional
+
+
+class Executor:
+    """Executes shell commands safely."""
+    
+    def __init__(self, safe_mode: bool = True):
+        self.safe_mode = safe_mode
+        
+    def execute_command(self, command: str, confirm_dangerous: bool = True) -> str:
+        """Execute a shell command with optional confirmation."""
+        if self.safe_mode and confirm_dangerous:
+            response = input(f"Execute: {command}? [y/N]: ")
+            if response.lower() != 'y':
+                return "Command cancelled by user"
+        
+        try:
+            if platform.system() == "Windows":
+                result = subprocess.run(
+                    ["powershell", "-Command", command],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            else:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+            
+            output = result.stdout if result.returncode == 0 else result.stderr
+            return output or "Command executed successfully (no output)"
+        except subprocess.TimeoutExpired:
+            return "Command timed out after 30 seconds"
+        except Exception as e:
+            return f"Error: {e}"
+
+
+class SystemController:
+    """Controls system functions."""
+    
+    def set_volume(self, direction: str):
+        """Adjust system volume."""
+        if platform.system() == "Windows":
+            if direction == "up":
+                os.system("powershell -c $wsh=New-Object -ComObject WScript.Shell; $wsh.SendKeys([char]175)")
+            elif direction == "down":
+                os.system("powershell -c $wsh=New-Object -ComObject WScript.Shell; $wsh.SendKeys([char]174)")
+            elif direction == "mute":
+                os.system("powershell -c $wsh=New-Object -ComObject WScript.Shell; $wsh.SendKeys([char]173)")
+    
+    def media_control(self, action: str):
+        """Control media playback."""
+        if platform.system() == "Windows":
+            key_map = {
+                "play": "[char]179",
+                "pause": "[char]179",
+                "playpause": "[char]179",
+                "next": "[char]176",
+                "prev": "[char]177",
+                "stop": "[char]178"
+            }
+            if action in key_map:
+                os.system(f"powershell -c $wsh=New-Object -ComObject WScript.Shell; $wsh.SendKeys({key_map[action]})")
+    
+    def take_screenshot(self, path: Optional[str] = None) -> str:
+        """Take a screenshot."""
+        try:
+            from PIL import ImageGrab
+            screenshot = ImageGrab.grab()
+            
+            if not path:
+                path = os.path.join(os.path.expanduser("~"), "Desktop", "tess_screenshot.png")
+            
+            screenshot.save(path)
+            return f"Screenshot saved to {path}"
+        except ImportError:
+            return "PIL not installed. Run: pip install pillow"
+        except Exception as e:
+            return f"Screenshot failed: {e}"
+    
+    def list_processes(self, limit: int = 10) -> str:
+        """List running processes."""
+        try:
+            if platform.system() == "Windows":
+                result = subprocess.run(
+                    ["powershell", "-Command", f"Get-Process | Select-Object -First {limit} | Format-Table -AutoSize"],
+                    capture_output=True,
+                    text=True
+                )
+            else:
+                result = subprocess.run(
+                    ["ps", "aux"],
+                    capture_output=True,
+                    text=True
+                )
+                lines = result.stdout.split('\n')[:limit+1]
+                return '\n'.join(lines)
+            
+            return result.stdout
+        except Exception as e:
+            return f"Failed to list processes: {e}"
+
+
+class FileManager:
+    """Manages file operations."""
+    
+    def list_dir(self, path: str) -> str:
+        """List directory contents."""
+        try:
+            items = os.listdir(path)
+            result = []
+            for item in items[:50]:
+                full_path = os.path.join(path, item)
+                item_type = "📁" if os.path.isdir(full_path) else "📄"
+                result.append(f"{item_type} {item}")
+            return '\n'.join(result) if result else "Empty directory"
+        except Exception as e:
+            return f"Error: {e}"
+    
+    def read_file(self, path: str, max_chars: int = 5000) -> str:
+        """Read file contents."""
+        try:
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read(max_chars)
+            return content
+        except Exception as e:
+            return f"Error reading file: {e}"
+    
+    def write_file(self, path: str, content: str) -> str:
+        """Write content to file."""
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            return f"File written: {path}"
+        except Exception as e:
+            return f"Error writing file: {e}"
+    
+    def patch_file(self, path: str, search_text: str, replace_text: str) -> str:
+        """Replace text in file."""
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            if search_text not in content:
+                return "Search text not found in file"
+            
+            new_content = content.replace(search_text, replace_text)
+            
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            
+            return f"File patched: {path}"
+        except Exception as e:
+            return f"Error patching file: {e}"
+
+
+class AppLauncher:
+    """Launches applications."""
+    
+    def __init__(self):
+        self.app_map = self._build_app_map()
+    
+    def _build_app_map(self) -> Dict[str, str]:
+        """Build map of app names to commands."""
+        apps = {
+            "chrome": "chrome",
+            "firefox": "firefox",
+            "edge": "msedge",
+            "notepad": "notepad",
+            "calculator": "calc",
+            "explorer": "explorer",
+            "cmd": "cmd",
+            "powershell": "powershell",
+            "code": "code",
+            "spotify": "spotify",
+        }
+        
+        if platform.system() == "Darwin":
+            apps = {
+                "chrome": "open -a 'Google Chrome'",
+                "firefox": "open -a Firefox",
+                "safari": "open -a Safari",
+                "terminal": "open -a Terminal",
+            }
+        elif platform.system() == "Linux":
+            apps = {
+                "chrome": "google-chrome",
+                "firefox": "firefox",
+                "terminal": "gnome-terminal",
+            }
+        
+        return apps
+    
+    def get_launch_command(self, app_name: str) -> Optional[str]:
+        """Get launch command for an app."""
+        app_name = app_name.lower().replace('.exe', '')
+        return self.app_map.get(app_name)
+    
+    def launch(self, app_name: str) -> str:
+        """Launch an application."""
+        cmd = self.get_launch_command(app_name)
+        if not cmd:
+            return f"Unknown app: {app_name}"
+        
+        try:
+            if platform.system() == "Windows":
+                subprocess.Popen(cmd, shell=True)
+            else:
+                subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return f"Launched {app_name}"
+        except Exception as e:
+            return f"Failed to launch {app_name}: {e}"
+
+
+class Orchestrator:
+    """
+    Routes actions to appropriate handlers.
+    Supports all TESS features.
+    """
+    
+    def __init__(self, config, components: Optional[Dict] = None):
+        self.config = config
+        self.executor = Executor(config.security.safe_mode)
+        self.system = SystemController()
+        self.files = FileManager()
+        self.apps = AppLauncher()
+        
+        # Optional components (loaded on demand)
+        self.components = components or {}
+    
+    def process_action(self, action: Dict[str, Any], output_callback=None, brain=None) -> str:
+        """
+        Process an action dictionary.
+        
+        Args:
+            action: Parsed action from Brain
+            output_callback: Optional callback for streaming output
+            brain: Brain instance for AI features
+            
+        Returns:
+            Result string
+        """
+        def output(text: str):
+            if output_callback:
+                output_callback(text)
+            else:
+                print(text)
+        
+        action_type = action.get("action", "error")
+        
+        # Route to handler
+        handlers = {
+            # Core
+            "launch_app": self._handle_launch_app,
+            "execute_command": self._handle_execute_command,
+            "system_control": self._handle_system_control,
+            "file_op": self._handle_file_op,
+            "browser_control": self._handle_browser_control,
+            "web_search_op": self._handle_web_search,
+            "web_op": self._handle_web_op,
+            "reply_op": self._handle_reply,
+            "error": self._handle_error,
+            
+            # Communication
+            "whatsapp_op": self._handle_whatsapp,
+            "gmail_op": self._handle_gmail,
+            "calendar_op": self._handle_calendar,
+            
+            # Media
+            "youtube_op": self._handle_youtube,
+            
+            # AI & Planning
+            "planner_op": self._handle_planner,
+            "teach_skill": self._handle_teach_skill,
+            "run_skill": self._handle_run_skill,
+            "research_op": self._handle_research,
+            "trip_planner_op": self._handle_trip_planner,
+            "converter_op": self._handle_converter,
+            "code_op": self._handle_code,
+            "memory_op": self._handle_memory,
+            "organize_op": self._handle_organize,
+            "task_op": self._handle_task,
+        }
+        
+        handler = handlers.get(action_type)
+        if handler:
+            return handler(action, output, brain)
+        else:
+            return f"Unhandled action type: {action_type}"
+    
+    # ===== Core Handlers =====
+    
+    def _handle_launch_app(self, action, output, brain):
+        app_name = action.get("app_name", "")
+        output(f"[TESS] Launching {app_name}...")
+        result = self.apps.launch(app_name)
+        output(f"[TESS] {result}")
+        return result
+    
+    def _handle_execute_command(self, action, output, brain):
+        command = action.get("command", "")
+        is_dangerous = action.get("is_dangerous", False)
+        
+        output(f"[TESS] Executing: {command}")
+        
+        if is_dangerous or self._is_dangerous_command(command):
+            if self.config.security.level == "HIGH":
+                return "Command blocked by HIGH security level"
+            if self.config.security.confirm_dangerous:
+                confirm = input("⚠️  Dangerous command. Execute? [y/N]: ")
+                if confirm.lower() != 'y':
+                    return "Command cancelled"
+        
+        result = self.executor.execute_command(command, confirm_dangerous=False)
+        output(f"[OUTPUT]\n{result[:1000]}")
+        return result
+    
+    def _handle_system_control(self, action, output, brain):
+        sub = action.get("sub_action", "")
+        
+        if "volume" in sub:
+            self.system.set_volume(sub.replace("volume_", ""))
+            return f"Volume {sub}"
+        elif "media" in sub or sub in ["play_pause", "play", "pause", "next", "prev"]:
+            action_name = sub.replace("media_", "").replace("play_pause", "playpause")
+            self.system.media_control(action_name)
+            return f"Media {action_name}"
+        elif sub == "screenshot":
+            result = self.system.take_screenshot()
+            output(f"[TESS] {result}")
+            return result
+        elif sub == "list_processes":
+            result = self.system.list_processes()
+            output(f"[PROCESSES]\n{result}")
+            return result
+        return f"Unknown system action: {sub}"
+    
+    def _handle_file_op(self, action, output, brain):
+        sub = action.get("sub_action", "")
+        path = os.path.expanduser(action.get("path", ""))
+        
+        if sub == "list":
+            result = self.files.list_dir(path)
+            output(f"[FILES]\n{result}")
+        elif sub == "read":
+            result = self.files.read_file(path)
+            output(f"[CONTENT]\n{result[:1000]}...")
+        elif sub == "write":
+            result = self.files.write_file(path, action.get("content", ""))
+            output(f"[TESS] {result}")
+        elif sub == "patch":
+            result = self.files.patch_file(path, action.get("search_text", ""), action.get("replace_text", ""))
+            output(f"[TESS] {result}")
+        else:
+            result = f"Unknown file action: {sub}"
+        return result
+    
+    def _handle_browser_control(self, action, output, brain):
+        sub = action.get("sub_action", "")
+        url = action.get("url", "")
+        
+        if sub == "go_to_url" and url:
+            import webbrowser
+            webbrowser.open(url)
+            return f"Opened {url}"
+        
+        # Try to use WebBrowser if available
+        if "web_browser" in self.components:
+            browser = self.components["web_browser"]
+            if sub == "new_tab":
+                return "New tab opened"
+            elif sub == "close_tab":
+                return "Tab closed"
+        
+        return f"Browser action '{sub}' may need web driver setup"
+    
+    def _handle_web_search(self, action, output, brain):
+        query = action.get("query", "")
+        output(f"[TESS] Searching: {query}")
+        
+        # Try to use WebBrowser if available
+        if "web_browser" in self.components and self.config.features.web_search:
+            try:
+                result = self.components["web_browser"].search(query)
+                output(f"[RESULTS]\n{result[:800]}")
+                return result
+            except Exception as e:
+                output(f"Search error: {e}")
+        
+        # Fallback: open in browser
+        import webbrowser
+        import urllib.parse
+        webbrowser.open(f"https://www.google.com/search?q={urllib.parse.quote(query)}")
+        return f"Opened search in browser"
+    
+    def _handle_web_op(self, action, output, brain):
+        if not self.config.features.web_scraping:
+            return "Web scraping disabled in config"
+        
+        sub = action.get("sub_action", "")
+        url = action.get("url", "")
+        
+        if "web_browser" in self.components:
+            browser = self.components["web_browser"]
+            if sub == "scrape":
+                result = browser.scrape(url)
+                output(f"[SCRAPED]\n{result[:800]}")
+                return result
+            elif sub == "screenshot":
+                result = browser.screenshot(url)
+                output(f"[TESS] Screenshot: {result}")
+                return result
+        
+        return "Web operations require WebBrowser component"
+    
+    def _handle_reply(self, action, output, brain):
+        content = action.get("content", "")
+        output(f"\n🤖 [TESS]: {content}\n")
+        return content
+    
+    def _handle_error(self, action, output, brain):
+        reason = action.get("reason", "Unknown error")
+        output(f"[ERROR] {reason}")
+        return reason
+    
+    # ===== Communication Handlers =====
+    
+    def _handle_whatsapp(self, action, output, brain):
+        if not self.config.features.whatsapp:
+            return "WhatsApp disabled in config"
+        
+        sub = action.get("sub_action", "")
+        contact = action.get("contact", "")
+        
+        if "whatsapp_client" not in self.components:
+            from .whatsapp_client import WhatsAppClient
+            self.components["whatsapp_client"] = WhatsAppClient(brain)
+        
+        client = self.components["whatsapp_client"]
+        
+        if sub == "send":
+            msg = action.get("message", "")
+            output(f"[WHATSAPP] Sending to {contact}...")
+            result = client.send_message(contact, msg)
+            output(f"[TESS] {result}")
+            return result
+        elif sub == "monitor":
+            from .task_registry import TaskRegistry
+            if "task_registry" not in self.components:
+                self.components["task_registry"] = TaskRegistry()
+            task_reg = self.components["task_registry"]
+            task_id = task_reg.start_task(f"WA-{contact}", client.monitor_loop, (contact,))
+            return f"Monitoring {contact} (Task: {task_id})"
+        elif sub == "stop":
+            return "Use 'task_op' to stop WhatsApp monitors"
+        
+        return f"Unknown WhatsApp action: {sub}"
+    
+    def _handle_gmail(self, action, output, brain):
+        if not self.config.features.gmail:
+            return "Gmail disabled in config"
+        
+        sub = action.get("sub_action", "")
+        
+        if "google_client" not in self.components:
+            from .google_client import GoogleClient
+            self.components["google_client"] = GoogleClient()
+        
+        client = self.components["google_client"]
+        
+        if sub == "list":
+            result = client.list_emails(action.get("max_results", 5))
+            output(f"[GMAIL]\n{result}")
+            return result
+        elif sub == "send":
+            result = client.send_email(
+                action.get("to_email", ""),
+                action.get("subject", ""),
+                action.get("body", "")
+            )
+            output(f"[TESS] {result}")
+            return result
+        
+        return f"Unknown Gmail action: {sub}"
+    
+    def _handle_calendar(self, action, output, brain):
+        if not self.config.features.calendar:
+            return "Calendar disabled in config"
+        
+        sub = action.get("sub_action", "")
+        
+        if "google_client" not in self.components:
+            from .google_client import GoogleClient
+            self.components["google_client"] = GoogleClient()
+        
+        client = self.components["google_client"]
+        
+        if sub == "list":
+            result = client.list_events()
+            output(f"[CALENDAR]\n{result}")
+            return result
+        elif sub == "create":
+            result = client.create_event(
+                action.get("summary", ""),
+                action.get("start_time", ""),
+                action.get("duration_minutes", 60)
+            )
+            output(f"[TESS] {result}")
+            return result
+        
+        return f"Unknown Calendar action: {sub}"
+    
+    # ===== Media Handlers =====
+    
+    def _handle_youtube(self, action, output, brain):
+        if not self.config.features.youtube:
+            return "YouTube disabled in config"
+        
+        sub = action.get("sub_action", "")
+        
+        if "youtube_client" not in self.components:
+            from .youtube_client import YouTubeClient
+            self.components["youtube_client"] = YouTubeClient(headless=False)
+        
+        client = self.components["youtube_client"]
+        
+        if sub == "play":
+            query = action.get("query", "")
+            output(f"[YOUTUBE] Playing: {query}")
+            result = client.play_video(query)
+            output(f"[TESS] {result}")
+            return result
+        else:
+            result = client.control(sub)
+            output(f"[TESS] {result}")
+            return result
+    
+    # ===== AI & Skill Handlers =====
+    
+    def _handle_planner(self, action, output, brain):
+        if not self.config.features.planner:
+            return "Planner disabled in config"
+        
+        from .planner import Planner
+        planner = Planner(brain)
+        
+        goal = action.get("goal", "")
+        output(f"[PLANNER] Planning: {goal}")
+        
+        plan = planner.create_plan(goal)
+        if plan:
+            output(f"[PLAN] {len(plan)} steps")
+            planner.execute_plan(plan, self, output)
+            return f"Executed plan with {len(plan)} steps"
+        return "Planning failed"
+    
+    def _handle_teach_skill(self, action, output, brain):
+        if not self.config.features.skills:
+            return "Skills disabled in config"
+        
+        from .skill_manager import SkillManager
+        from .planner import Planner
+        
+        skill_mgr = SkillManager()
+        planner = Planner(brain)
+        
+        name = action.get("name", "")
+        goal = action.get("goal", "")
+        
+        output(f"[SKILL] Learning '{name}'...")
+        plan = skill_mgr.learn_skill(name, goal, planner)
+        
+        if plan:
+            return f"Skill '{name}' learned with {len(plan)} steps"
+        return "Failed to learn skill"
+    
+    def _handle_run_skill(self, action, output, brain):
+        if not self.config.features.skills:
+            return "Skills disabled in config"
+        
+        from .skill_manager import SkillManager
+        
+        skill_mgr = SkillManager()
+        name = action.get("name", "")
+        
+        output(f"[SKILL] Running '{name}'...")
+        return skill_mgr.run_skill(name, self, output)
+    
+    def _handle_research(self, action, output, brain):
+        if not self.config.features.research:
+            return "Research disabled in config"
+        
+        from ..skills.research import ResearchSkill
+        
+        # Ensure web browser
+        if "web_browser" not in self.components:
+            from .web_browser import WebBrowser
+            self.components["web_browser"] = WebBrowser()
+        
+        researcher = ResearchSkill(brain, self.components["web_browser"])
+        
+        topic = action.get("topic", "")
+        depth = action.get("depth", 3)
+        
+        output(f"[RESEARCH] Researching: {topic}")
+        result = researcher.run(topic, depth)
+        output(f"[TESS] {result}")
+        return result
+    
+    def _handle_trip_planner(self, action, output, brain):
+        if not self.config.features.trip_planner:
+            return "Trip planner disabled in config"
+        
+        from ..skills.trip_planner import TripPlannerSkill
+        
+        if "web_browser" not in self.components:
+            from .web_browser import WebBrowser
+            self.components["web_browser"] = WebBrowser()
+        
+        planner = TripPlannerSkill(brain, self.components["web_browser"])
+        
+        result = planner.run(
+            destination=action.get("destination", ""),
+            dates=action.get("dates", ""),
+            budget=action.get("budget"),
+            origin=action.get("origin", "Current Location"),
+            transport_mode=action.get("transport_mode", "Any")
+        )
+        output(f"[TESS] {result}")
+        return result
+    
+    def _handle_converter(self, action, output, brain):
+        if not self.config.features.file_converter:
+            return "File converter disabled in config"
+        
+        from ..skills.converter import ConverterSkill
+        
+        converter = ConverterSkill()
+        result = converter.run(
+            action.get("sub_action", ""),
+            action.get("source_paths", []),
+            action.get("output_filename")
+        )
+        output(f"[CONVERTER] {result}")
+        return result
+    
+    def _handle_code(self, action, output, brain):
+        if not self.config.features.code_generation:
+            return "Code generation disabled in config"
+        
+        sub = action.get("sub_action", "")
+        filename = action.get("filename", "")
+        
+        if sub == "write":
+            content = action.get("content", "")
+            result = self.files.write_file(filename, content)
+            return result
+        elif sub == "execute":
+            # Run Python script
+            if filename.endswith('.py'):
+                result = self.executor.execute_command(f"python {filename}")
+                return result
+            return "Only Python files supported"
+        
+        return f"Unknown code action: {sub}"
+    
+    def _handle_memory(self, action, output, brain):
+        if not self.config.features.memory:
+            return "Memory disabled in config"
+        
+        sub = action.get("sub_action", "")
+        
+        from .memory_engine import MemoryEngine
+        memory = MemoryEngine()
+        
+        if sub == "memorize":
+            content = action.get("content", "")
+            result = memory.memorize(content)
+            output(f"[MEMORY] {result}")
+            return result
+        elif sub == "forget":
+            return "Use memory ID to forget specific items"
+        
+        return f"Unknown memory action: {sub}"
+    
+    def _handle_organize(self, action, output, brain):
+        if not self.config.features.organizer:
+            return "Organizer disabled in config"
+        
+        from .organizer import Organizer
+        
+        organizer = Organizer(brain)
+        path = action.get("path", "")
+        criteria = action.get("criteria", "type")
+        
+        output(f"[ORGANIZER] Organizing {path} by {criteria}...")
+        result = organizer.organize(path, criteria)
+        output(f"[TESS] {result}")
+        return result
+    
+    def _handle_task(self, action, output, brain):
+        if not self.config.features.task_registry:
+            return "Task registry disabled in config"
+        
+        from .task_registry import TaskRegistry
+        
+        if "task_registry" not in self.components:
+            self.components["task_registry"] = TaskRegistry()
+        
+        registry = self.components["task_registry"]
+        sub = action.get("sub_action", "")
+        
+        if sub == "list":
+            result = registry.list_tasks()
+            output(f"[TASKS]\n{result}")
+            return result
+        elif sub == "stop":
+            task_id = action.get("task_id", "")
+            result = registry.stop_task(task_id)
+            output(f"[TESS] {result}")
+            return result
+        
+        return f"Unknown task action: {sub}"
+    
+    # ===== Helper Methods =====
+    
+    def _is_dangerous_command(self, command: str) -> bool:
+        """Check if command is potentially dangerous."""
+        patterns = [
+            "rm -rf", "del /s", "format", "rd /s", "rmdir /s",
+            "shutdown", "taskkill", "reg delete"
+        ]
+        cmd_lower = command.lower()
+        return any(p in cmd_lower for p in patterns)
+
+
+def process_action(action, config, output_callback=None, brain=None, components=None) -> str:
+    """Convenience function."""
+    orch = Orchestrator(config, components or {})
+    return orch.process_action(action, output_callback, brain)
