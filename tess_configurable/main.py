@@ -286,6 +286,8 @@ def main():
             sys.argv[i] = '--version'
         elif arg in ('-help', '-h'):
             sys.argv[i] = '--help'
+        elif arg in ('-google-setup', '-g'):
+            sys.argv[i] = '--google-setup'
     
     parser = argparse.ArgumentParser(
         description="TESS Terminal - Configurable AI Agent",
@@ -295,7 +297,8 @@ Examples:
   tess                    Start interactive mode
   tess --setup            Run first-time setup (also: -setup)
   tess --settings         Open settings menu (also: -settings)
-  tess "open chrome"      Execute single command
+  tess --google-setup     Setup Gmail and Calendar
+  tess "read my emails"   Execute single command
   tess --version          Show version (also: -version)
         """
     )
@@ -330,6 +333,12 @@ Examples:
         help="Show version"
     )
     
+    parser.add_argument(
+        "--google-setup",
+        action="store_true",
+        help="Setup Google Gmail and Calendar integration"
+    )
+    
     args = parser.parse_args()
     
     # Version check
@@ -340,6 +349,12 @@ Examples:
     # Setup wizard
     if args.setup:
         success = run_setup(force=True)
+        sys.exit(0 if success else 1)
+    
+    # Google setup wizard
+    if args.google_setup:
+        from .google_setup_wizard import run_google_setup
+        success = run_google_setup()
         sys.exit(0 if success else 1)
     
     # Settings menu
