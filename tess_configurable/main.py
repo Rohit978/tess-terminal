@@ -274,16 +274,29 @@ class TessTerminal:
 
 def main():
     """Main entry point."""
+    # Fix common typos: -setup → --setup, -settings → --settings, etc.
+    for i, arg in enumerate(sys.argv[1:], 1):
+        if arg in ('-setup', '-s'):
+            sys.argv[i] = '--setup'
+        elif arg in ('-settings', '-c'):
+            sys.argv[i] = '--settings'
+        elif arg in ('-reset', '-r'):
+            sys.argv[i] = '--reset'
+        elif arg in ('-version', '-v'):
+            sys.argv[i] = '--version'
+        elif arg in ('-help', '-h'):
+            sys.argv[i] = '--help'
+    
     parser = argparse.ArgumentParser(
         description="TESS Terminal - Configurable AI Agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   tess                    Start interactive mode
-  tess --setup            Run first-time setup
-  tess --settings         Open settings menu
+  tess --setup            Run first-time setup (also: -setup)
+  tess --settings         Open settings menu (also: -settings)
   tess "open chrome"      Execute single command
-  tess --version          Show version
+  tess --version          Show version (also: -version)
         """
     )
     

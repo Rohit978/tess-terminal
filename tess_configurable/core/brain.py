@@ -10,7 +10,12 @@ from typing import Optional, Dict, Any, List
 try:
     from groq import Groq
     from openai import OpenAI
+    try:
+    from google import genai
+    GENAI_NEW = True
+except ImportError:
     import google.generativeai as genai
+    GENAI_NEW = False
     from pydantic import TypeAdapter, ValidationError
 except ImportError as e:
     print(f"Missing dependency: {e}")
@@ -71,8 +76,11 @@ class Brain:
                 
         elif provider == "gemini" and key:
             try:
-                genai.configure(api_key=key)
-                self.gemini_client = genai.GenerativeModel(self.current_model)
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    genai.configure(api_key=key)
+                    self.gemini_client = genai.GenerativeModel(self.current_model)
             except Exception as e:
                 print(f"Failed to init Gemini: {e}")
         
@@ -93,8 +101,11 @@ class Brain:
         gem_key = self.config_mgr.get_api_key("gemini")
         if gem_key and self.current_provider != "gemini":
             try:
-                genai.configure(api_key=gem_key)
-                self.gemini_client = genai.GenerativeModel('gemini-2.0-flash')
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    genai.configure(api_key=gem_key)
+                    self.gemini_client = genai.GenerativeModel('gemini-2.0-flash')
             except:
                 pass
     
@@ -116,8 +127,11 @@ class Brain:
             self.client = OpenAI(api_key=key, base_url="https://api.deepseek.com")
             self.current_model = "deepseek-chat"
         elif new_provider == "gemini":
-            genai.configure(api_key=key)
-            self.gemini_client = genai.GenerativeModel('gemini-2.0-flash')
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                genai.configure(api_key=key)
+                self.gemini_client = genai.GenerativeModel('gemini-2.0-flash')
             self.current_model = "gemini-2.0-flash"
         else:
             return False
@@ -207,26 +221,30 @@ class Brain:
         if not self.gemini_client:
             return None
         
-        # Convert messages to Gemini format
-        history = []
-        system_msg = ""
-        
-        for msg in messages:
-            if msg["role"] == "system":
-                system_msg = msg["content"]
-            elif msg["role"] == "user":
-                history.append({"role": "user", "parts": [msg["content"]]})
-            elif msg["role"] == "assistant":
-                history.append({"role": "model", "parts": [msg["content"]]})
-        
-        chat = self.gemini_client.start_chat(history=history[:-1] if history else [])
-        
-        last_msg = history[-1]["parts"][0] if history else ""
-        if system_msg and json_mode:
-            last_msg = f"{system_msg}\n\nRespond in JSON.\n\n{last_msg}"
-        
-        response = chat.send_message(last_msg)
-        return response.text
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            
+            # Convert messages to Gemini format
+            history = []
+            system_msg = ""
+            
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_msg = msg["content"]
+                elif msg["role"] == "user":
+                    history.append({"role": "user", "parts": [msg["content"]]})
+                elif msg["role"] == "assistant":
+                    history.append({"role": "model", "parts": [msg["content"]]})
+            
+            chat = self.gemini_client.start_chat(history=history[:-1] if history else [])
+            
+            last_msg = history[-1]["parts"][0] if history else ""
+            if system_msg and json_mode:
+                last_msg = f"{system_msg}\n\nRespond in JSON.\n\n{last_msg}"
+            
+            response = chat.send_message(last_msg)
+            return response.text
     
     def _parse_and_validate(self, raw_content: str, max_attempts: int = 2) -> Dict[str, Any]:
         """Parse and validate LLM response."""

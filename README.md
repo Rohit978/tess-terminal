@@ -228,4 +228,4 @@ Inspired by the original TESS Terminal Pro. This configurable edition focuses on
 
 If you find TESS useful, please consider starring the repo!
 
-[![Star History Chart](https://api.star-history.com/svg?repos=YOUR_USERNAME/tess-terminal&type=Date)](https://star-history.com/#YOUR_USERNAME/tess-terminal&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=YOUR_USERNAME/tess-terminal&type=Date)](https://star-history.com/Rohit978/tess-terminal&Date)
