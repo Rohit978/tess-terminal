@@ -6,6 +6,7 @@ Routes actions to appropriate handlers.
 import os
 import subprocess
 import platform
+from pathlib import Path
 from typing import Dict, Any, Callable, Optional
 
 # Lazy imports for optional features
@@ -337,7 +338,12 @@ class Orchestrator:
         
         handler = handlers.get(action_type)
         if handler:
-            return handler(action, output, brain)
+            try:
+                return handler(action, output, brain)
+            except Exception as e:
+                error_msg = f"Error in {action_type}: {str(e)}"
+                output(f"[ERROR] {error_msg}")
+                return error_msg
         else:
             return f"Unhandled action type: {action_type}"
     

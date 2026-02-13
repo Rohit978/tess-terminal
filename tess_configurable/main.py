@@ -371,21 +371,21 @@ Examples:
     
     # Google setup wizard
     if args.google_setup:
-        from .google_setup_wizard import run_google_setup
+        from tess_configurable.google_setup_wizard import run_google_setup
         success = run_google_setup()
         sys.exit(0 if success else 1)
     
     # Notion setup
     if args.notion_setup:
         console.print("\n[bold cyan]Notion Integration Setup[/bold cyan]\n")
-        from .core.notion_client import NotionClient
+        from tess_configurable.core.notion_client import NotionClient
         client = NotionClient()
         console.print(client.get_setup_instructions())
         sys.exit(0)
     
     # Telegram setup
     if args.telegram_setup:
-        from .telegram_setup_wizard import run_telegram_setup
+        from tess_configurable.telegram_setup_wizard import run_telegram_setup
         success = run_telegram_setup()
         sys.exit(0 if success else 1)
     

@@ -178,7 +178,7 @@ class Brain:
         if ds_key and self.current_provider != "deepseek":
             try:
                 self.deepseek_client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com")
-            except:
+            except Exception:
                 pass
         
         # Gemini backup
@@ -190,7 +190,7 @@ class Brain:
                     warnings.simplefilter("ignore")
                     genai.configure(api_key=gem_key)
                     self.gemini_client = genai.GenerativeModel('gemini-2.0-flash')
-            except:
+            except Exception:
                 pass
     
     def _switch_provider(self, new_provider: str) -> bool:

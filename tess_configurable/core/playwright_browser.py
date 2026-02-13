@@ -111,13 +111,16 @@ class PlaywrightBrowser:
         try:
             if self.context:
                 await self.context.close()
-        except:
+                self.context = None
+        except Exception:
             pass
         try:
             if self.playwright:
                 await self.playwright.stop()
-        except:
+                self.playwright = None
+        except Exception:
             pass
+        self.page = None
     
     # ===== Sync wrappers for easier use =====
     
@@ -158,7 +161,7 @@ class WhatsAppPlaywright:
                 await self.browser.wait_for_selector('[data-testid="chat-list"]', timeout=60000)
                 self.logged_in = True
                 return "✓ Logged in successfully!"
-            except:
+            except Exception:
                 return "⚠ QR code not scanned within 60 seconds"
                 
         except Exception as e:
@@ -219,7 +222,9 @@ class WebSearchPlaywright:
     async def search(self, query: str) -> str:
         """Search Google and return results."""
         try:
-            await self.browser.goto(f"https://www.google.com/search?q={query}")
+            from urllib.parse import quote_plus
+            encoded_query = quote_plus(query)
+            await self.browser.goto(f"https://www.google.com/search?q={encoded_query}")
             
             # Wait for results
             await self.browser.wait_for_selector("#search", timeout=10000)
@@ -240,7 +245,7 @@ class WebSearchPlaywright:
                     snippet = await snippet_elem.text_content() if snippet_elem else ""
                     
                     output.append(f"{i}. {title}\n{snippet[:150]}...")
-                except:
+                except Exception:
                     continue
             
             return "\n\n".join(output) if output else "No results found"

@@ -209,7 +209,7 @@ class ConfigManager:
             # Secure the config file (Windows)
             try:
                 os.chmod(self.config_file, 0o600)
-            except:
+            except Exception:
                 pass  # Windows may not support this
             return True
         except Exception as e:
