@@ -896,9 +896,25 @@ class Orchestrator:
         from ..skills.converter import ConverterSkill
         
         converter = ConverterSkill()
+        
+        # Handle source paths (could be string or list)
+        source_paths = action.get("source_paths", [])
+        if isinstance(source_paths, str):
+            # Could be comma-separated or single path
+            if "," in source_paths:
+                source_paths = [p.strip() for p in source_paths.split(",")]
+            else:
+                source_paths = [source_paths]
+        
+        # Expand user paths and clean quotes
+        cleaned_paths = []
+        for path in source_paths:
+            path = os.path.expanduser(path.strip('"\''))
+            cleaned_paths.append(path)
+        
         result = converter.run(
             action.get("sub_action", ""),
-            action.get("source_paths", []),
+            cleaned_paths,
             action.get("output_filename")
         )
         output(f"[CONVERTER] {result}")
