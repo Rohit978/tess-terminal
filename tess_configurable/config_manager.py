@@ -114,7 +114,7 @@ class TessConfig:
     telegram_user_id: str = ""
     telegram_allowed_users: List[str] = field(default_factory=list)
     first_run: bool = True
-    version: str = "1.0.0"
+    version: str = "1.1.0"
 
 
 class ConfigManager:
